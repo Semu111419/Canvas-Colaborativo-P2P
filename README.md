@@ -135,36 +135,6 @@ Si usas Visual Studio Code, instala la extensión **Live Server**, haz clic dere
 
 ---
 
-## 🌐 Instrucciones de Despliegue en GitHub Pages
-
-La aplicación no requiere ningún paso de compilación (`npm build`), por lo que su despliegue en GitHub Pages es inmediato:
-
-1. **Crear o inicializar el repositorio Git:**
-   ```bash
-   git init
-   git add .
-   git commit -m "feat: Canvas colaborativo P2P completo"
-   ```
-2. **Subir a GitHub:**
-   ```bash
-   git branch -M main
-   git remote add origin https://github.com/TU_USUARIO/TU_REPOSITORIO.git
-   git push -u origin main
-   ```
-3. **Activar GitHub Pages:**
-   - Entra en tu repositorio en GitHub y ve a **Settings** &rarr; pestaña **Pages**.
-   - En la sección **Build and deployment**:
-     - **Source:** *Deploy from a branch*.
-     - **Branch:** Selecciona `main` y la carpeta `/ (root)`.
-     - Haz clic en **Save**.
-4. En 1–2 minutos, GitHub Pages publicará tu aplicación en:
-   ```text
-   https://TU_USUARIO.github.io/TU_REPOSITORIO/
-   ```
-   *Nota:* Al estar alojado en GitHub Pages con HTTPS automático, los navegadores móviles (iOS Safari y Android Chrome) permitirán el acceso nativo a la cámara trasera para el escaneo de códigos QR.
-
----
-
 ## ⚙️ Arquitectura Técnica y Decisiones de Diseño
 
 ### 1. WebRTC Serverless con SDP Compactado
@@ -193,14 +163,3 @@ La cámara infinita sincroniza `x`, `y` y `scale` (zoom). Para asegurar una expe
 
 ---
 
-## 📋 Resumen de Cumplimiento de Criterios
-
-| Criterio de Aceptación | Estado | Implementación |
-| :--- | :---: | :--- |
-| **1. Dos celulares se conectan y comparten sesión** | ✅ | Emparejamiento QR bidireccional Oferta/Respuesta vía WebRTC DataChannel sin backend permanente. |
-| **2. Imágenes y modificaciones sincronizadas bidireccionalmente** | ✅ | Eventos `OBJECT_ADD`, `OBJECT_UPDATE`, `OBJECT_DELETE` e `IMAGE_CHUNK` en tiempo real. |
-| **3. Desplazamiento y zoom reflejados en tiempo real** | ✅ | Cámara compartida continua (`CAMERA_SYNC`), soporte multitáctil *pinch-to-zoom* y pan. |
-| **4. Manipulación simultánea de objetos diferentes** | ✅ | Objetos desacoplados por ID y resolución de conflictos determinista LWW en objetos compartidos. |
-| **5. Recuperación de estado tras reconexión** | ✅ | Handshake `STATE_SYNC_REQUEST` y `STATE_SYNC` completo con retransmisión de imágenes faltantes. |
-| **6. Funciona en navegadores móviles modernos** | ✅ | Probado con WebRTC estándar, soporte táctil adaptativo y *viewport-fit=cover* para iOS y Android. |
-| **7. Comunicación directa sin servidores externos** | ✅ | Las imágenes y coordenadas viajan cifradas punto a punto mediante RTCDataChannel; el servidor solo aloja archivos estáticos. |
