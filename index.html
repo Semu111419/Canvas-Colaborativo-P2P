@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Canvas Colaborativo P2P</title>
+  
+  <meta name="description" content="Canvas infinito colaborativo en tiempo real para dos dispositivos móviles mediante WebRTC P2P y QR.">
+  <meta name="theme-color" content="#0f1218">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- Librerías de terceros (vendored para funcionamiento local y GitHub Pages sin servidor) -->
+  <script src="vendor/konva.min.js"></script>
+  <script src="vendor/qrcode.js"></script>
+  <script src="vendor/html5-qrcode.min.js"></script>
+  <script src="vendor/pako.min.js"></script>
+</head>
+<body>
+
+  <!-- 1. Cabecera Superior -->
+  <header class="app-header">
+    <div class="header-brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M4 4h7v7H4V4zm11 0h5v5h-5V4zm-7 11h7v5H8v-5zm10 0h2v5h-2v-5zM4 13h2v7H4v-7z"/>
+        </svg>
+      </div>
+      <span class="brand-title">Canvas P2P</span>
+    </div>
+
+    <div class="header-status">
+      <div id="connectionBadge" class="status-badge status-disconnected">
+        <span id="connectionStatusText">Desconectado</span>
+      </div>
+      <span id="connectionLatency" class="latency-badge"></span>
+    </div>
+
+    <div class="header-actions">
+      <button id="btnOpenPairModal" class="btn-connect" title="Vincular celulares">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"/>
+          <rect x="14" y="3" width="7" height="7"/>
+          <rect x="14" y="14" width="7" height="7"/>
+          <rect x="3" y="14" width="7" height="7"/>
+        </svg>
+        <span>Conectar</span>
+      </button>
+
+      <button id="btnOpenHelp" class="btn-icon-nav" title="Instrucciones">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- 2. Indicador Flotante de Cámara Compartida -->
+  <div class="camera-indicator-wrap">
+    <div id="cameraIndicator" class="camera-pill pill-synced">Cámara compartida</div>
+  </div>
+
+  <!-- 3. Contenedor del Lienzo Infinito Konva -->
+  <div id="canvasContainer"></div>
+
+  <!-- 4. Controles Flotantes de Zoom -->
+  <div class="floating-zoom-panel">
+    <button id="btnZoomIn" class="btn-zoom" title="Acercar">+</button>
+    <span id="zoomLevelBadge" class="zoom-level-badge">100%</span>
+    <button id="btnZoomOut" class="btn-zoom" title="Alejar">-</button>
+  </div>
+
+  <!-- 5. Barra de Progreso de Transferencia de Imágenes Binarias -->
+  <div id="transferProgressContainer" class="transfer-progress-container">
+    <div class="progress-header">
+      <span id="transferProgressText">Sincronizando imagen...</span>
+    </div>
+    <div class="progress-bar-bg">
+      <div id="transferProgressBar" class="progress-bar-fill"></div>
+    </div>
+  </div>
+
+  <!-- 6. Barra de Herramientas Inferior (Móvil) -->
+  <nav class="mobile-toolbar">
+    <!-- Input oculto para cargar archivos de la galería o cámara -->
+    <input type="file" id="imageFileInput" accept="image/*" multiple style="display: none;">
+
+    <button id="btnAddImage" class="tool-btn" title="Añadir imagen desde galería o cámara">
+      <svg viewBox="0 0 24 24">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+      <span>Imagen</span>
+    </button>
+
+    <button id="btnPasteImage" class="tool-btn" title="Pegar desde el portapapeles">
+      <svg viewBox="0 0 24 24">
+        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+        <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+      </svg>
+      <span>Pegar</span>
+    </button>
+
+    <button id="btnToggleCamera" class="tool-btn active" title="Alternar sincronización de cámara">
+      <svg viewBox="0 0 24 24">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+        <circle cx="12" cy="13" r="4"/>
+      </svg>
+      <span>Cámara</span>
+    </button>
+
+    <button id="btnLayerUp" class="tool-btn disabled" disabled title="Traer hacia adelante">
+      <svg viewBox="0 0 24 24">
+        <polyline points="18 15 12 9 6 15"/>
+      </svg>
+      <span>Adelante</span>
+    </button>
+
+    <button id="btnDuplicateObject" class="tool-btn disabled" disabled title="Duplicar seleccionado">
+      <svg viewBox="0 0 24 24">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+      </svg>
+      <span>Duplicar</span>
+    </button>
+
+    <button id="btnDeleteObject" class="tool-btn btn-danger disabled" disabled title="Eliminar seleccionado">
+      <svg viewBox="0 0 24 24">
+        <polyline points="3 6 5 6 21 6"/>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+      </svg>
+      <span>Eliminar</span>
+    </button>
+
+    <button id="btnResetView" class="tool-btn" title="Centrar lienzo al origen">
+      <svg viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="22" y1="12" x2="18" y2="12"/>
+        <line x1="6" y1="12" x2="2" y2="12"/>
+        <line x1="12" y1="6" x2="12" y2="2"/>
+        <line x1="12" y1="22" x2="12" y2="18"/>
+      </svg>
+      <span>Centrar</span>
+    </button>
+  </nav>
+
+  <!-- 7. Contenedor de Notificaciones Toast -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- 8. Modal de Emparejamiento P2P con QR -->
+  <div id="pairModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Emparejar Dispositivos</h3>
+        <button class="modal-close" title="Cerrar">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-tabs">
+          <button id="tabHost" class="tab-btn active">1. Anfitrión (Crear)</button>
+          <button id="tabGuest" class="tab-btn">2. Invitado (Unirse)</button>
+        </div>
+
+        <!-- Vista Anfitrión -->
+        <div id="viewHost" class="tab-view active">
+          <div id="hostStep1">
+            <p class="qr-instructions">Crea una sala en este celular para compartir el canvas directamente con otro celular.</p>
+            <button id="btnStartHost" class="btn-action-primary">Crear sala (Generar QR)</button>
+          </div>
+
+          <div id="hostStep2" style="display: none;">
+            <div class="instructions-step">
+              <span class="step-num">1</span>
+              <span>Muestra este código QR al segundo celular para que lo escanee:</span>
+            </div>
+
+            <div id="hostQrContainer" class="qr-container"></div>
+
+            <div class="code-field-wrap">
+              <input type="text" id="hostCodeInput" class="code-field" readonly title="Código de Oferta">
+              <button id="btnCopyHostCode" class="btn-action-secondary" style="margin-top:0; width:auto; padding:0 12px;">Copiar</button>
+            </div>
+
+            <div class="instructions-step" style="margin-top: 14px;">
+              <span class="step-num">2</span>
+              <span>Una vez que el segundo celular escanee tu QR, generará una <strong>Respuesta</strong>. Escanéala aquí:</span>
+            </div>
+
+            <button id="btnHostScanAnswer" class="btn-action-primary">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"/>
+                <rect x="14" y="3" width="7" height="7"/>
+                <rect x="14" y="14" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/>
+              </svg>
+              Escanear Respuesta del Invitado
+            </button>
+
+            <button id="btnHostPasteAnswer" class="btn-action-secondary">O pegar respuesta en texto</button>
+          </div>
+        </div>
+
+        <!-- Vista Invitado -->
+        <div id="viewGuest" class="tab-view">
+          <div id="guestStep1">
+            <p class="qr-instructions">Escanea el código QR que se muestra en la pantalla del celular Anfitrión:</p>
+
+            <button id="btnGuestScanOffer" class="btn-action-primary">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"/>
+                <rect x="14" y="3" width="7" height="7"/>
+                <rect x="14" y="14" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/>
+              </svg>
+              Escanear QR del Anfitrión
+            </button>
+
+            <button id="btnGuestPasteOffer" class="btn-action-secondary">O pegar código del Anfitrión</button>
+          </div>
+
+          <div id="guestStep2" style="display: none;">
+            <div class="instructions-step">
+              <span class="step-num">✓</span>
+              <span>¡Oferta recibida! Ahora muestra este QR de respuesta al Anfitrión:</span>
+            </div>
+
+            <div id="guestQrContainer" class="qr-container"></div>
+
+            <div class="code-field-wrap">
+              <input type="text" id="guestCodeInput" class="code-field" readonly title="Código de Respuesta">
+              <button id="btnCopyGuestCode" class="btn-action-secondary" style="margin-top:0; width:auto; padding:0 12px;">Copiar</button>
+            </div>
+
+            <p class="qr-instructions" style="margin-top:12px; font-size:0.8rem; color:var(--accent-green);">
+              Esperando a que el Anfitrión escanee tu código para conectar...
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 9. Modal del Escáner de Cámara QR -->
+  <div id="scannerModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="scannerTitle" class="modal-title">Escanear código QR</h3>
+        <button id="btnCloseScanner" class="modal-close" title="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body" style="text-align: center;">
+        <p class="qr-instructions" style="margin-bottom: 12px;">Apunta la cámara hacia el código QR del otro celular:</p>
+        <div id="qrReader"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 10. Modal de Entrada Manual de Código de Conexión -->
+  <div id="manualInputModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="manualInputTitle" class="modal-title">Pegar código de conexión</h3>
+        <button class="modal-close" title="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="qr-instructions">Si no tienes acceso a la cámara, pega el código de señalización recibido:</p>
+        <textarea id="manualCodeTextarea" class="textarea-code" placeholder="Pega aquí el código..."></textarea>
+        <button id="btnSubmitManualCode" class="btn-action-primary" style="margin-top: 14px;">Conectar con este código</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 11. Modal de Ayuda e Instrucciones -->
+  <div id="helpModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Instrucciones de Uso</h3>
+        <button class="modal-close" title="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="help-section">
+          <h4>📱 Procedimiento de Conexión (2 Celulares)</h4>
+          <ul>
+            <li><strong>Celular 1 (Anfitrión):</strong> Pulsa "Conectar" &rarr; pestaña Anfitrión &rarr; pulsa "Crear sala". Mostrará un QR.</li>
+            <li><strong>Celular 2 (Invitado):</strong> Pulsa "Conectar" &rarr; pestaña Invitado &rarr; pulsa "Escanear QR" y enfoca la pantalla del Celular 1.</li>
+            <li><strong>Completar enlace:</strong> El Celular 2 mostrará su propio QR de respuesta. El Celular 1 pulsa "Escanear Respuesta" y enfoca la pantalla del Celular 2.</li>
+            <li>¡Listo! Ambos quedan conectados directamente mediante WebRTC DataChannel sin servidores intermedios.</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h4>🎨 Gestos del Canvas Infinito</h4>
+          <ul>
+            <li><strong>Desplazamiento (Pan):</strong> Desliza un dedo sobre el fondo vacío para mover el lienzo.</li>
+            <li><strong>Zoom:</strong> Usa dos dedos (pellizco) para acercar o alejar, o usa los botones laterales (+ / -).</li>
+            <li><strong>Manipular imagen:</strong> Toca una imagen para seleccionarla. Arrastra desde las esquinas para escalar o rotar, y desde el cuerpo para mover.</li>
+            <li><strong>Cámara Compartida:</strong> El usuario que mueva el lienzo tomará el control visual reflejando la vista en el otro celular en tiempo real.</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h4>🔒 Privacidad y P2P</h4>
+          <p>Tus imágenes y dibujos viajan directamente entre ambos celulares a través de un canal de datos WebRTC cifrado. No se almacenan en ningún servidor ni base de datos.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Módulo principal JS -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
